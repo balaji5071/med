@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, User, Bot, Loader2, Stethoscope, Activity, Rocket, Paperclip, X, LogOut } from "lucide-react";
+import { Send, User, Bot, Loader2, Stethoscope, Activity, Rocket, Paperclip, X, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm"; // Ensure you run: npm install remark-gfm
+import remarkGfm from "remark-gfm";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { useSession, signOut, SessionProvider } from "next-auth/react";
-import AuthForm from "./AuthForm";
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -19,14 +17,25 @@ type Message = {
     image?: string;
 };
 
-function ChatApp() {
-    const { data: session, status } = useSession();
+// Helper to manage guest session
+const getGuestSessionId = () => {
+    if (typeof window === 'undefined') return 'guest-session';
+    let id = localStorage.getItem('aimed_guest_id');
+    if (!id) {
+        id = 'guest_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('aimed_guest_id', id);
+    }
+    return id;
+};
+
+export default function ChatInterface() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [isAntiGravity, setIsAntiGravity] = useState(false);
     const [attachedImage, setAttachedImage] = useState<string | null>(null);
-    
+    const [sessionId, setSessionId] = useState<string>("");
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -39,24 +48,18 @@ function ChatApp() {
         scrollToBottom();
     }, [messages, attachedImage, isLoading]);
 
-    // Load Chat History
+    // Initialize Session and Load History
     useEffect(() => {
-        if (status === "authenticated" && session?.user?.email) {
-            const sessionId = session.user.email;
-            fetch(`/api/chat/history?sessionId=${sessionId}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.messages) setMessages(data.messages);
-                })
-                .catch(err => console.error("History error:", err));
-        }
-    }, [status, session]);
+        const sid = getGuestSessionId();
+        setSessionId(sid);
 
-    if (status === "loading") {
-        return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-teal-600" size={32} /></div>;
-    }
-
-    if (status === "unauthenticated") return <AuthForm />;
+        fetch(`/api/chat/history?sessionId=${sid}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.messages) setMessages(data.messages);
+            })
+            .catch(err => console.error("History error:", err));
+    }, []);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -75,12 +78,12 @@ function ChatApp() {
         if (abortControllerRef.current) abortControllerRef.current.abort();
         abortControllerRef.current = new AbortController();
 
-        const userMessage: Message = { 
-            role: "user", 
+        const userMessage: Message = {
+            role: "user",
             content: input,
             image: attachedImage || undefined
         };
-        
+
         setMessages((prev) => [...prev, userMessage]);
         setInput("");
         setAttachedImage(null);
@@ -91,10 +94,10 @@ function ChatApp() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 signal: abortControllerRef.current.signal,
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     messages: [...messages, userMessage],
                     isAntiGravity,
-                    sessionId: session?.user?.email 
+                    sessionId: sessionId // Use the guest session ID
                 }),
             });
 
@@ -103,7 +106,7 @@ function ChatApp() {
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-            
+
             // Placeholder for AI response
             setMessages((prev) => [...prev, { role: "model", content: "" }]);
 
@@ -127,7 +130,16 @@ function ChatApp() {
             }
         } finally {
             setIsLoading(false);
-        }  
+        }
+    };
+
+    const handleReset = () => {
+        if (confirm("Start a clean chat session?")) {
+            setMessages([]);
+            const newId = 'guest_' + Math.random().toString(36).substring(2, 9);
+            localStorage.setItem('aimed_guest_id', newId);
+            setSessionId(newId);
+        }
     };
 
     return (
@@ -146,15 +158,16 @@ function ChatApp() {
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                     <button
+                    <button
                         onClick={() => setIsAntiGravity(!isAntiGravity)}
-                        className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border", 
+                        className={cn("flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border",
                             isAntiGravity ? "bg-purple-600 text-white border-purple-400" : "bg-slate-100 text-slate-600 border-slate-200")}
-                     >
+                    >
                         <Rocket size={14} className={cn("transition-transform", isAntiGravity && "-rotate-45")} />
                         <span className="hidden sm:inline">ANTI-GRAVITY</span>
-                     </button>
-                     <button onClick={() => signOut()} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><LogOut size={20} /></button>
+                    </button>
+                    {/* Changed LogOut to Reset Session since we are guest only now */}
+                    <button onClick={handleReset} title="New Session" className="p-2 text-slate-400 hover:text-teal-600 transition-colors"><Sparkles size={20} /></button>
                 </div>
             </header>
 
@@ -209,7 +222,7 @@ function ChatApp() {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             placeholder={isAntiGravity ? "Ask in zero-G..." : "Type your medical query..."}
-                            className={cn("w-full py-4 px-6 rounded-2xl border transition-all outline-none", 
+                            className={cn("w-full py-4 px-6 rounded-2xl border transition-all outline-none",
                                 isAntiGravity ? "bg-slate-800 border-slate-700 text-white focus:border-purple-500" : "bg-slate-50 border-slate-200 focus:ring-2 focus:ring-teal-500/20")}
                         />
                         <button disabled={isLoading} type="submit" className={cn("absolute right-2 p-3 rounded-xl text-white transition-transform active:scale-95", isAntiGravity ? "bg-purple-600" : "bg-teal-600")}>
@@ -220,8 +233,4 @@ function ChatApp() {
             </footer>
         </div>
     );
-}
-
-export default function ChatInterface() {
-    return <SessionProvider><ChatApp /></SessionProvider>;
 }
