@@ -43,17 +43,27 @@ export async function getConversation(sessionId: string) {
 }
 
 export async function createUser(email: string, passwordHash: string) {
-    const client = await clientPromise;
-    const db = client.db("aimed_guru");
-    return db.collection("users").insertOne({
-        email,
-        password: passwordHash,
-        createdAt: new Date(),
-    });
+    try {
+        const client = await clientPromise;
+        const db = client.db("aimed_guru");
+        return await db.collection("users").insertOne({
+            email,
+            password: passwordHash,
+            createdAt: new Date(),
+        });
+    } catch (error) {
+        console.error("Failed to create user:", error);
+        throw new Error("Database error");
+    }
 }
 
 export async function findUserByEmail(email: string) {
-    const client = await clientPromise;
-    const db = client.db("aimed_guru");
-    return db.collection("users").findOne({ email });
+    try {
+        const client = await clientPromise;
+        const db = client.db("aimed_guru");
+        return await db.collection("users").findOne({ email });
+    } catch (error) {
+        console.error("Failed to find user:", error);
+        return null;
+    }
 }

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@types/bcryptjs": "^2.4.6",
+    "@types/bcryptjs": "^2.4.6", 
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "lucide-react": "^0.562.0",
